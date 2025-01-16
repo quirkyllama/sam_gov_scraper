@@ -121,7 +121,7 @@ def process_opportunity(opportunity: int) -> None:
                     session.add(link)
 
             session.commit()
-            logger.info(f"Added contract: {title}")
+            logger.info(f"Added contract: {contract.title} as {contract.id}")
 
     except KeyError as e:
         logger.error(f"KeyError processing opportunity: {e} in {json.dumps(json_data, indent=2)}")
