@@ -44,6 +44,10 @@ I've run the scaper with 50 workers. From my laptop it gets about 40rps. At that
 I've seen the occasional 500 error from the server, so I don't want to run it any faster for fear that I will either break the server, or cause admins to do something to block my IP.
 **NOTE**: If you run this near US-EAST-1, the same # of workers will have a much higher RPS (and load on SAM.GOV).
 
+## SqlAlchemy
+The DB is a Postgresql database. I've used SqlAlchemy to interact with it. I plan to use Alembic to manage schema upgrades, though at this point it wasn't necessary.
+
 ## Schema
 The Schema is relatively simple. Links are normalized as are contractors.
 We only store the primary point of contact.
+
