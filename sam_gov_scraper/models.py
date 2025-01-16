@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import JSON, Column, String, DateTime, Float, ForeignKey, Table
+from sqlalchemy import JSON, Boolean, Column, Index, Integer, String, DateTime, Float, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ARRAY
 
@@ -20,27 +20,53 @@ def get_session():
         Session = sessionmaker(bind=_create_engine())
     return Session()
 
-class DepartmentAgency(Base):
-    __tablename__ = 'department_agencies'
+# class DepartmentAgency(Base):
+#     __tablename__ = 'department_agencies'
     
-    id = Column(String, primary_key=True)
-    name = Column(String)
+#     id = Column(String, primary_key=True)
+#     name = Column(String)
 
-class Contractor(Base):
-    __tablename__ = 'contractors'
+class SamContractor(Base):
+    __tablename__ = 'sam_contractors'
     
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
     unique_entity_id = Column(String)
     name = Column(String)
     address = Column(String)
 
+    # Relationships
+    contracts = relationship("SamContract", back_populates="contractor")
+
+class SamLink(Base):
+    __tablename__ = 'sam_links'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    attachment_id = Column(String)
+    resource_id = Column(String)
+    extension = Column(String)
+
+    # Foreign key to parent contract
+    contract_id = Column(Integer, ForeignKey('sam_contracts.id'))
+    
+    # Relationship back to parent contract
+    contract = relationship("SamContract", back_populates="links")
+
+    def get_url(self):
+       return f"https://sam.gov/api/prod/opps/v3/opportunities/resources/files/{self.resource_id}/download?&token="
+
 class SamContract(Base):
     __tablename__ = 'sam_contracts'
 
-    _id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
+    solicitation_number = Column(String)
+    opportunity_id = Column(String)
+    title = Column(String)  
+    description = Column(String)
     notice_id = Column(String)
     contract_award_date = Column(DateTime)
     contract_award_number = Column(String)
+    contract_amount = Column(Float)
     task_delivery_order_number = Column(String)
     base_and_all_options_value = Column(Float)
     contract_opportunity_type = Column(String)
@@ -54,14 +80,33 @@ class SamContract(Base):
     place_of_performance = Column(String)
     raw_xhr_data = Column(JSON)
     links = Column(ARRAY(String))
+    archived = Column(Boolean, default=False)
+    cancelled = Column(Boolean, default=False) 
+    deleted = Column(Boolean, default=False)
+    modified_date = Column(DateTime)
+
+    # There are multiple point of contacts
+    # Only recording the primary right now
+    point_of_contact_email = Column(String)
+    point_of_contact_name = Column(String)
+    point_of_contact_phone = Column(String)
+
+    department_agency_id =Column(String)
 
     # Foreign Keys
-    department_agency_id = Column(String, ForeignKey('department_agencies.id'))
-    contractor_id = Column(String, ForeignKey('contractors.id'))
+    contractor_id = Column(Integer, ForeignKey('sam_contractors.id'))
 
     # Relationships
-    department_agency = relationship("DepartmentAgency")
-    contractor = relationship("Contractor")
+    contractor = relationship("SamContractor", back_populates="contracts")
+
+    __table_args__ = (
+        Index('idx_sam_contracts_solicitation_number', 'solicitation_number'),
+        Index('idx_sam_contracts_opportunity_id', 'opportunity_id'),
+        Index('idx_sam_contracts_contract_award_date', 'contract_award_date'),
+    )
+
+# Add relationship to SamContract class
+SamContract.links = relationship("SamLink", back_populates="contract")
 
 def reset_db():
     """Drops all tables and recreates the schema"""

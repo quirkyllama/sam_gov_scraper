@@ -5,7 +5,9 @@ import json
 import logging
 import requests
 from typing import List, Dict
-from urllib.parse import urljoin
+
+from sam_gov_scraper.models import SamContract, get_session
+from sam_gov_scraper.process_opportunity import process_opportunity
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +31,7 @@ def fetch_opportunities(start_date: datetime, end_date: datetime, page: int, ret
         start_date_str = start_date.strftime("%Y-%m-%d") + "-07:00"
         end_date_str = end_date.strftime("%Y-%m-%d") + "-07:00"
         url = BASE_URL.format(page=page, page_size=PAGE_SIZE, start_date=start_date_str, end_date=end_date_str)
-        # logger.info(f"Fetching opportunities for org {url}")
+        # logger.info( f"Fetching opportunities for {url}")
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         xhr_data = response.json()
@@ -48,30 +50,26 @@ def fetch_opportunities(start_date: datetime, end_date: datetime, page: int, ret
             return None
 
 
-def process_opportunity(opportunity: id) -> None:
-    """Process a single opportunity"""
-    
-    # try:
-    #     # Extract relevant data and store in database
-    #     # This is where you'd implement your database storage logic
-    #     notice_id = opportunity.get('noticeId')
-    #     title = opportunity.get('title')
-    #     logger.info(f"Processing opportunity: {notice_id} - {title}")
-        
-    # except Exception as e:
-    #     logger.error(f"Error processing opportunity: {e}")
-
 def main(max_workers: int):
     logger.info(f"Starting scraper with {max_workers} workers")
     # Process opportunities using thread pool
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         entries = 0
         entries_by_id = {}
-        begin_date = datetime(2024, 1, 1)
-        for day in range(365):
-            start_date = begin_date + timedelta(days=day)
+        futures = []
+        # Find the oldest contract to use as starting point
+        with get_session() as session:
+            oldest_contract = session.query(SamContract).order_by(SamContract.modified_date.asc()).first()
+            if oldest_contract and oldest_contract.modified_date:
+                begin_date = oldest_contract.modified_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                logger.info(f"Starting from oldest contract date: {begin_date}")
+            else:
+                begin_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        for day in range(1, 365 * 10):
+            start_date = begin_date - timedelta(days=day)
             end_date = start_date + timedelta(days=1)
-            # logger.info(f"Processin g day {day} {start_date}")
+            logger.info(f"Processin g day {day} {start_date}")
             org_entries = 0
             page = 0
             while True:
@@ -86,7 +84,7 @@ def main(max_workers: int):
                         # print(f"Skipping {id} because it already exists")
                         continue
                     entries_by_id[id] = True
-                    executor.submit(process_opportunity, id)
+                    futures.append(executor.submit(process_opportunity, id))
                     org_entries += 1
                 page += 1
             logger.info(f"Processed {org_entries} entries for day {start_date}")
@@ -94,18 +92,8 @@ def main(max_workers: int):
             entries += org_entries
 
 
-        # # Fetch and process remaining pages
-        # for page in range(2, total_pages + 1):
-        #     data = fetch_opportunities(page=page)
-        #     if data:
-        #         opportunities = data.get('opportunities', [])
-        #         futures.extend(
-        #             executor.submit(process_opportunity, opp) 
-        #             for opp in opportunities
-        #         )
-        
         # # Wait for all tasks to complete
-        # concurrent.futures.wait(futures)
+        concurrent.futures.wait(futures)
     
     logger.info("Scraping completed")
 
