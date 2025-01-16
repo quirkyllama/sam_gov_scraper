@@ -31,7 +31,7 @@ def fetch_opportunities(start_date: datetime, end_date: datetime, page: int, ret
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0"
         }
-        
+        # Look, I don't make the rules, this is the actual timestamp format expected by SAM.GOV!
         start_date_str = start_date.strftime("%Y-%m-%d") + "-07:00"
         end_date_str = end_date.strftime("%Y-%m-%d") + "-07:00"
         url = BASE_URL.format(page=page, page_size=PAGE_SIZE, start_date=start_date_str, end_date=end_date_str)
