@@ -37,6 +37,7 @@ It makes 2 requests for each opportunity:
 
 During #1 we discover that some opportunities are not accessible for permission reasons.
 See: [example](https://sam.gov/api/prod/opps/v2/opportunities/74552?random=1737005582919)
+With ~1% of opportunties processed, almost 12% are missing due to permissions.
 
 We are currently not storing any info about the opportunities missing due to permissions.
 
