@@ -5,6 +5,7 @@ import json
 import logging
 import requests
 from typing import List, Dict
+import time
 
 from sam_gov_scraper.models import SamContract, get_session
 from sam_gov_scraper.process_opportunity import process_opportunity
@@ -22,6 +23,9 @@ PAGE_SIZE = 400
 
 def fetch_opportunities(start_date: datetime, end_date: datetime, page: int, retry: int = 0) -> Dict:
     """Fetch opportunities from SAM.gov API"""
+    # Slow down the opportunity listing- we are limited by the details requests,
+    # So dom'
+    time.sleep(1)  # Add 1 second delay between requests
     try:
         headers = {
             "Content-Type": "application/json",
@@ -69,7 +73,7 @@ def main(max_workers: int):
         for day in range(1, 365 * 10):
             start_date = begin_date - timedelta(days=day)
             end_date = start_date + timedelta(days=1)
-            logger.info(f"Processin g day {day} {start_date}")
+            logger.info(f"Processing day {day} {start_date}")
             org_entries = 0
             page = 0
             while True:
