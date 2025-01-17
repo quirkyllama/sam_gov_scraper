@@ -108,16 +108,24 @@ def process_opportunity(opportunity: int) -> None:
             session.flush()
             for attachmentList in links:
                 for link in attachmentList['attachments']:
+                    link_type = link.get('type')                    
                     link_name = link.get('name')
                     link_attachment_id = link.get('attachmentId')
                     link_resource_id = link.get('resourceId')
                     link_extension = link.get('mimeType')
+                    if link.get('type') == 'link':
+                        url = link.get('uri')
+                    else:
+                        url = f"https://sam.gov/api/prod/opps/v3/opportunities/resources/files/{link_resource_id}/download?&token="
+
                     link = SamLink(
                         attachment_id=link_attachment_id,
                         name=link_name,
+                        link_type=link_type,
                         resource_id=link_resource_id,
                         extension=link_extension,
-                        contract_id=contract.id
+                        contract_id=contract.id,
+                        url=url
                     )
                     # logger.info(f"Adding link: {link} {link.get_url()}")
                     session.add(link)
@@ -195,4 +203,4 @@ def print_contract(contract: SamContract):
         print(f"      Attachment ID: {link.attachment_id}")
         print(f"      Resource ID: {link.resource_id}")
         print(f"      Extension: {link.extension}")
-        print(f"      URL: {link.get_url()}")
+        print(f"      URL: {link.url}")

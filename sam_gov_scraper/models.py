@@ -56,16 +56,16 @@ class SamLink(Base):
     attachment_id = Column(String)
     resource_id = Column(String)
     extension = Column(String)
-
+    # File vs link?
+    link_type = Column(String)
+    url = Column(String)
     # Foreign key to parent contract
     contract_id = Column(Integer, ForeignKey('sam_contracts.id'))
     
     # Relationship back to parent contract
     contract = relationship("SamContract", back_populates="links")
 
-    def get_url(self):
-       return f"https://sam.gov/api/prod/opps/v3/opportunities/resources/files/{self.resource_id}/download?&token="
-
+    
 class SamContract(Base):
     __tablename__ = 'sam_contracts'
 
