@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import requests
 
-from sam_gov_scraper.models import SamContractor, SamContract, SamLink, get_session
+from sam_gov_scraper.models import SamContractor, SamContract, SamLink, SamPointOfContact, get_session
 
 
 logger = logging.getLogger(__name__)
@@ -60,9 +60,13 @@ def process_opportunity(opportunity: int) -> None:
                 contracts_skipped += 1
                 return
             title = json_data.get('title')
+            organization_id = json_data.get('organizationId')
             solicitation_number = json_data.get('solicitationNumber')
-            description = json_data.get('description', {}).get('body')
-            award_date = award.get('awardDate')
+            description = all_data['description']
+            if len(description) > 0:
+                description = description[0].get('body')
+
+            award_date = award.get('date')
             try:
                 amount = float(award.get('amount'))
             except:
@@ -74,22 +78,16 @@ def process_opportunity(opportunity: int) -> None:
             modified_date = all_data.get('modifiedDate')
             # Some things are missing modifiedDate?
             modified_date = datetime.strptime(modified_date, '%Y-%m-%dT%H:%M:%S.%f%z') if modified_date else None
-            point_of_contact = json_data.get('pointOfContact', [])
-            # Extract primary point of contact
-            point_of_contact = next((x for x in point_of_contact if x.get('type') == 'primary'), {})
-            if len(point_of_contact) == 0:
-                logger.info(f"No point of contact found for opportunity {opportunity}")
-            point_of_contact_email = point_of_contact.get('email')
-            point_of_contact_name = point_of_contact.get('fullName') 
-            point_of_contact_phone = point_of_contact.get('phone')
-
+            naics_code = next((x for x in json_data.get('naics', []) if x.get('type') == 'primary'), {})
+            naics_code = naics_code.get('code')[0] if naics_code.get('code') else None
             contractor = None
             awardee_id = None
             awardee_name = None
-
+            award_number = None
             if awardee:
                 awardee_id = awardee.get('ueiSAM')
                 awardee_name = awardee.get('name')
+                award_number = award.get('number')
                 if awardee_id:
                     contractor = session.query(SamContractor).filter_by(unique_entity_id=awardee_id).first()
                     if not contractor:
@@ -107,16 +105,15 @@ def process_opportunity(opportunity: int) -> None:
                 solicitation_number=solicitation_number,
                 title=title,
                 description=description,
+                naics_code=naics_code,
+                organization_id=organization_id,
                 contract_award_date=award_date,
-                contract_award_number=award.get('awardNumber') if award else None,
+                contract_award_number=award_number,
                 contract_amount=amount,
                 modified_date=modified_date,
                 archived=archived,
                 cancelled=cancelled,
                 deleted=deleted,
-                point_of_contact_email=point_of_contact_email,
-                point_of_contact_name=point_of_contact_name,
-                point_of_contact_phone=point_of_contact_phone,
                 contractor_id=contractor.id if contractor else None,
                 raw_xhr_data=all_data
             )
@@ -139,6 +136,16 @@ def process_opportunity(opportunity: int) -> None:
                     )
                     # logger.info(f"Adding link: {link} {link.get_url()}")
                     session.add(link)
+            points_of_contact = json_data.get('pointOfContact', [])
+            for poc in points_of_contact:
+                point_of_contact = SamPointOfContact(
+                    name=poc.get('fullName'),
+                    email=poc.get('email'),
+                    phone=poc.get('phone'),
+                    contact_type=poc.get('type'),
+                    contract_id=contract.id
+                )
+                session.add(point_of_contact) 
 
             session.commit()
             contracts_added += 1
@@ -159,3 +166,43 @@ def process_opportunity(opportunity: int) -> None:
         logger.error(f"Error processing opportunity: {e}\n{traceback.format_exc()}")
         logger.error(f"Error processing opportunity: {e}")
         raise e
+
+
+def print_contract(contract: SamContract):
+    print(f"Contract details:")
+    print(f"  ID: {contract.id}")
+    print(f"  Opportunity ID: {contract.opportunity_id}")
+    print(f"  Solicitation #: {contract.solicitation_number}")
+    print(f"  Title: {contract.title}")
+    print(f"  Description: {contract.description}")
+    print(f"  NAICS Code: {contract.naics_code}")
+    print(f"  Organization ID: {contract.organization_id}")
+    print(f"  Award Date: {contract.contract_award_date}")
+    print(f"  Award Number: {contract.contract_award_number}")
+    print(f"  Amount: {contract.contract_amount}")
+    print(f"  Modified Date: {contract.modified_date}")
+    print(f"  Archived: {contract.archived}")
+    print(f"  Cancelled: {contract.cancelled}")
+    print(f"  Deleted: {contract.deleted}")
+    
+    if contract.contractor:
+        print(f"  Contractor:")
+        print(f"    ID: {contract.contractor.id}")
+        print(f"    Name: {contract.contractor.name}")
+        print(f"    UEI: {contract.contractor.unique_entity_id}")
+        print(f"    Address: {contract.contractor.address}")
+
+    print(f"  Points of Contact:")
+    for poc in contract.points_of_contact:
+        print(f"    - Name: {poc.name}")
+        print(f"      Email: {poc.email}")
+        print(f"      Phone: {poc.phone}")
+        print(f"      Type: {poc.contact_type}")
+
+    logger.info(f"  Links:")
+    for link in contract.links:
+        print(f"    - Name: {link.name}")
+        print(f"      Attachment ID: {link.attachment_id}")
+        print(f"      Resource ID: {link.resource_id}")
+        print(f"      Extension: {link.extension}")
+        print(f"      URL: {link.get_url()}")

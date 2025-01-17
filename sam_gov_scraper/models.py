@@ -12,7 +12,7 @@ Session = None
 
 def _create_engine():
     # Initializes the database 
-    return create_engine(os.environ.get("DATABASE_URL"))
+    return create_engine(os.environ.get("DATABASE_URL"), pool_size=20)
 
 def get_session():
     global Session
@@ -25,6 +25,17 @@ def get_session():
     
 #     id = Column(String, primary_key=True)
 #     name = Column(String)
+
+class SamPointOfContact(Base):
+    __tablename__ = 'sam_point_of_contacts'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    email = Column(String)
+    phone = Column(String)
+    contact_type = Column(String)
+    contract_id = Column(Integer, ForeignKey('sam_contracts.id'))
+    contract = relationship("SamContract", back_populates="points_of_contact")
 
 class SamContractor(Base):
     __tablename__ = 'sam_contractors'
@@ -63,21 +74,11 @@ class SamContract(Base):
     opportunity_id = Column(String)
     title = Column(String)  
     description = Column(String)
-    notice_id = Column(String)
     contract_award_date = Column(DateTime)
     contract_award_number = Column(String)
     contract_amount = Column(Float)
-    task_delivery_order_number = Column(String)
-    base_and_all_options_value = Column(Float)
-    contract_opportunity_type = Column(String)
-    original_published_date = Column(DateTime)
-    inactive_policy = Column(String)
-    original_inactive_date = Column(DateTime)
-    initiative = Column(ARRAY(String))
-    original_set_aside = Column(String)
-    product_service_code = Column(String)
+    organization_id = Column(String)
     naics_code = Column(String)
-    place_of_performance = Column(String)
     raw_xhr_data = Column(JSON)
     links = Column(ARRAY(String))
     archived = Column(Boolean, default=False)
@@ -85,19 +86,14 @@ class SamContract(Base):
     deleted = Column(Boolean, default=False)
     modified_date = Column(DateTime)
 
-    # There are multiple point of contacts
-    # Only recording the primary right now
-    point_of_contact_email = Column(String)
-    point_of_contact_name = Column(String)
-    point_of_contact_phone = Column(String)
-
-    department_agency_id =Column(String)
-
     # Foreign Keys
     contractor_id = Column(Integer, ForeignKey('sam_contractors.id'))
 
     # Relationships
     contractor = relationship("SamContractor", back_populates="contracts")
+
+    # Relationship to points of contact
+    points_of_contact = relationship("SamPointOfContact", back_populates="contract")
 
     __table_args__ = (
         Index('idx_sam_contracts_solicitation_number', 'solicitation_number'),
