@@ -47,6 +47,7 @@ def process_opportunity(opportunity: int) -> None:
     global contracts_skipped
     global contract_permission_errors
     try:
+        contract_fields = {'opportunity_id': opportunity}
         all_data = fetch_opportunity_details(opportunity)
         json_data = all_data['data2']
 
@@ -59,35 +60,33 @@ def process_opportunity(opportunity: int) -> None:
             if existing_contract:
                 contracts_skipped += 1
                 return
-            title = json_data.get('title')
-            organization_id = json_data.get('organizationId')
-            solicitation_number = json_data.get('solicitationNumber')
+            contract_fields['title'] = json_data.get('title')
+            contract_fields['organization_id'] = json_data.get('organizationId')
+            contract_fields['solicitation_number'] = json_data.get('solicitationNumber')
             description = all_data['description']
             if len(description) > 0:
-                description = description[0].get('body')
+                contract_fields['description'] = description[0].get('body')
 
-            award_date = award.get('date')
+            contract_fields['contract_award_date'] = award.get('date')
             try:
-                amount = float(award.get('amount'))
+                contract_fields['contract_amount'] = float(award.get('amount'))
             except:
                 amount = None
             
-            archived = all_data.get('archived')
-            cancelled = all_data.get('cancelled')
-            deleted = all_data.get('deleted')
+            contract_fields['archived'] = all_data.get('archived')
+            contract_fields['cancelled'] = all_data.get('cancelled')
+            contract_fields['deleted'] = all_data.get('deleted')
             modified_date = all_data.get('modifiedDate')
             # Some things are missing modifiedDate?
-            modified_date = datetime.strptime(modified_date, '%Y-%m-%dT%H:%M:%S.%f%z') if modified_date else None
+            contract_fields['modified_date'] = datetime.strptime(modified_date, '%Y-%m-%dT%H:%M:%S.%f%z') if modified_date else None
             naics_code = next((x for x in json_data.get('naics', []) if x.get('type') == 'primary'), {})
-            naics_code = naics_code.get('code')[0] if naics_code.get('code') else None
-            contractor = None
-            awardee_id = None
-            awardee_name = None
-            award_number = None
+            contract_fields['naics_code'] = naics_code.get('code')[0] if naics_code.get('code') else None
+            
             if awardee:
+                contract_fields['contract_award_number'] = award.get('number')
+
                 awardee_id = awardee.get('ueiSAM')
                 awardee_name = awardee.get('name')
-                award_number = award.get('number')
                 if awardee_id:
                     contractor = session.query(SamContractor).filter_by(unique_entity_id=awardee_id).first()
                     if not contractor:
@@ -96,26 +95,12 @@ def process_opportunity(opportunity: int) -> None:
                             name=awardee_name
                         )
                         session.add(contractor)
-            # if not contractor:
-            #     logger.info(f"No awardee found for opportunity {opportunity}")
-
+                        session.flush()
+                    contract_fields['contractor_id'] = contractor.id
+            contract_fields['raw_xhr_data'] = all_data
         
             contract = SamContract(
-                opportunity_id=opportunity,
-                solicitation_number=solicitation_number,
-                title=title,
-                description=description,
-                naics_code=naics_code,
-                organization_id=organization_id,
-                contract_award_date=award_date,
-                contract_award_number=award_number,
-                contract_amount=amount,
-                modified_date=modified_date,
-                archived=archived,
-                cancelled=cancelled,
-                deleted=deleted,
-                contractor_id=contractor.id if contractor else None,
-                raw_xhr_data=all_data
+                **contract_fields
             )
 
             session.add(contract)
@@ -148,9 +133,14 @@ def process_opportunity(opportunity: int) -> None:
                 session.add(point_of_contact) 
 
             session.commit()
-            contracts_added += 1
+            contracts_added += 1            
             if contracts_added % 100 == 0:
                 logger.info(f"Added {contracts_added} contracts with {contract_errors} unknown errors {contract_permission_errors} permission errors and {contracts_skipped} skipped")
+
+            # Print the occassional contract to make sure the data looks correct
+            if contracts_added % 500 == 0:
+                print_contract(contract)
+
 
     except KeyError as e:
         contract_errors += 1
